@@ -13,16 +13,17 @@
 ## What is it?
 It is a real-time subreddit text analysis dashboard.
 
-## Idea
-To be able to keep up with trending hashtags and topics, a dashboard is used to get keywords, entities, subreddit' sentiment, subreddit' emotions, and frequent words from a given hashtag/topic.
 ## Architecture
 
 <img src="assets/architecture.png" />
-Implemented Lambda Architecture to handle the streaming of twitter's data ingested by Kafka, then to Spark to be processed, then stored in Cassandra as the batch storage, and to Redis as the speed layer to be analyzed in Dash. Each component is its own microservice. 
+Implemented Event Driven Microservice Architecture to handle the streaming of subreddit's data ingested by Kafka, then to Spark to be processed, then stored in Cassandra as the batch storage, and to Redis as the speed layer to be analyzed in Dash. Each component is its own microservice. 
 <br>
 <br>
 
-**Microservices:**
+## Idea
+To be able to keep up with trending hashtags and topics, a dashboard is used to get keywords, entities, subreddit' sentiment, subreddit' emotions, and frequent words from a given hashtag/topic.
+
+## Microservices
 
 - SparkStream is a python package (<a href="https://pypi.org/project/SparkStream/#description">SparkStream-pypi</a>). A simple spark streaming handler; it listens to a kafka topic, process the data, and store it into cassandra and redis. Accessible via an API and deployed in a docker container. <a href="https://github.com/HassanRady/Spark-Stream-Api"> SparkStream-github</a>
 

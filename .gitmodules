@@ -1,0 +1,30 @@
+[submodule "text_analysis_dashboard"]
+	path = text_analysis_dashboard
+	url = git@github.com:HassanRady/text_analysis_dashboard.git
+[submodule "sentiment_text_detection"]
+	path = sentiment_text_detection
+	url = git@github.com:HassanRady/sentiment_text_detection.git
+[submodule "named_entity_recognition_service"]
+	path = named_entity_recognition_service
+	url = git@github.com:HassanRady/named_entity_recognition_service.git
+[submodule "keyword_extraction_service"]
+	path = keyword_extraction_service
+	url = git@github.com:HassanRady/keyword_extraction_service.git
+[submodule "kafka_to_redis"]
+	path = kafka_to_redis
+	url = git@github.com:HassanRady/kafka_to_redis.git
+[submodule "emotion_text_detection"]
+	path = emotion_text_detection
+	url = git@github.com:HassanRady/emotion_text_detection.git
+[submodule "spark_stream_text_cleaner"]
+	path = spark_stream_text_cleaner
+	url = git@github.com:HassanRady/spark_stream_text_cleaner.git
+[submodule "reddit_kafka"]
+	path = reddit_kafka
+	url = git@github.com:HassanRady/reddit_kafka.git
+[submodule "top_subreddits_service"]
+	path = top_subreddits_service
+	url = git@github.com:HassanRady/top_subreddits_service.git
+[submodule "wordcloud_service"]
+	path = wordcloud_service
+	url = git@github.com:HassanRady/wordcloud_service.git

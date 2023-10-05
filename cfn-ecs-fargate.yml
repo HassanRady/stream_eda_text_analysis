@@ -1,0 +1,124 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: ECS Fargate template.
+
+Parameters:
+  ExportResourcesStack:
+    Description: The name of the resources stack that exports values
+    Type: String
+    Default: resources
+  ExportSecurityGroupStack:
+    Type: String
+    Default: sg
+  ExportELBStack:
+    Type: String
+    Default: alb
+  VPC:
+    Type: AWS::EC2::VPC::Id
+  ImageStreamProducer:
+    Type: String
+    Default: 686137320634.dkr.ecr.eu-north-1.amazonaws.com/reddit-kafka-stream:3.0
+  ServiceName1:
+    Type: String
+    Default: stream-producer
+    AllowedValues: [stream-producer]
+  EnvFile:
+    Type: String
+    Default: arn:aws:s3:::env-la42wiby/prod.env
+  BootStrapServers:
+    Type: String
+
+Resources:
+  Cluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: MSK-Fargate-Demo
+
+  TaskDefinition1:
+    Type: AWS::ECS::TaskDefinition
+    DependsOn: LogGroup1
+    Properties:
+      Family: !Join ['', [!Ref ServiceName1, TaskDefinition1]]
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      Cpu: 2048
+      Memory: 4GB
+      ExecutionRoleArn: !Ref ExecutionRole
+      TaskRoleArn: !Ref TaskRole
+      ContainerDefinitions:
+        - Name: !Ref ServiceName1
+          Image: !Ref ImageStreamProducer
+          EnvironmentFiles:
+            - Value: !Ref EnvFile
+              type: s3
+          Environment:
+            - Name: KAFKA_BOOTSTRAP_SERVERS
+              Value: !Ref BootStrapServers
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-region: !Ref AWS::Region
+              awslogs-group: !Ref LogGroup1
+              awslogs-stream-prefix: ecs
+          PortMappings:
+            - ContainerPort: 8080
+              HostPort: 8080
+              Protocol: tcp
+              AppProtocol: http
+
+  ExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: "AmazonECSTaskExecutionRole"
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy'
+        - 'arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess'
+
+  TaskRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName:  "AWSFargateServiceTaskRole"
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/CloudWatchLogsFullAccess'
+        - 'arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess'
+
+  Service1:
+    Type: AWS::ECS::Service
+    Properties:
+      ServiceName: !Ref ServiceName1
+      Cluster: !Ref Cluster
+      TaskDefinition: !Ref TaskDefinition1
+      DeploymentConfiguration:
+        MinimumHealthyPercent: 100
+        MaximumPercent: 200
+      DesiredCount: 1
+      LaunchType: FARGATE
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: ENABLED
+          Subnets:
+            - Fn::ImportValue: !Sub ${ExportResourcesStack}-PrivateSubnet1
+          SecurityGroups:
+            - Fn::ImportValue: !Sub ${ExportSecurityGroupStack}-ServiceSecurityGroup
+      LoadBalancers:
+        - ContainerName: !Ref ServiceName1
+          ContainerPort: 8080
+          TargetGroupArn: 
+            Fn::ImportValue: !Sub ${ExportELBStack}-ALBTargetGroup
+
+  LogGroup1:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Join ['', [/ecs/, !Ref ServiceName1, TaskDefinition1]]

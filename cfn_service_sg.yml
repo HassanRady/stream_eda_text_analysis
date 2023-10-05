@@ -1,0 +1,33 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: This resolves the security group dependencies between the stacks
+
+Parameters:
+  ExportResourcesStack:
+    Description: The name of the resources stack that exports values
+    Type: String
+    Default: resources
+  ExportELBStack:
+    Description: The name of the ELB stack that exports values
+    Type: String
+    Default: alb
+
+Resources:
+  ServiceSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Enable load balancer access to the ECS instances
+      VpcId: 
+        Fn::ImportValue: !Sub ${ExportResourcesStack}-VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 0
+          ToPort: 65535
+          SourceSecurityGroupId:
+            Fn::ImportValue: !Sub ${ExportELBStack}-ALBSecurityGroup
+
+Outputs:
+  ServiceSecurityGroup:
+    Description: The security group ID for the service
+    Value: !Ref ServiceSecurityGroup
+    Export:
+      Name: !Sub ${AWS::StackName}-ServiceSecurityGroup

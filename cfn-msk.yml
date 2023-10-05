@@ -1,0 +1,179 @@
+AWSTemplateFormatVersion: 2010-09-09
+
+Parameters:
+  ExportResourcesStack:
+    Description: The name of the resources stack that exports values
+    Type: String
+    Default: resources
+  SecurityGroupsStack:
+    Description: The name of the security groups stack that exports values
+    Type: String
+  KeyName:
+    Description: Name of an existing EC2 KeyPair to enable SSH access to the instance
+    Type: 'AWS::EC2::KeyPair::KeyName'
+    ConstraintDescription: Can contain only ASCII characters.
+  SSHLocation:
+    Description: The IP address range that can be used to SSH to the EC2 instances
+    Type: String
+    MinLength: '9'
+    MaxLength: '18'
+    Default: 0.0.0.0/0
+    AllowedPattern: '(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})/(\d{1,2})'
+    ConstraintDescription: Must be a valid IP CIDR range of the form x.x.x.x/x
+
+Mappings:
+  RegionAMI:
+    eu-north-1:
+      HVM64: ami-0703b5d7f7da98d1e
+
+Resources:
+  KafkaClientInstanceSecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: Enable SSH access via port 22
+      VpcId: 
+        Fn::ImportValue: !Sub ${ExportResourcesStack}-VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: !Ref SSHLocation
+  MSKSecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: Enable TCP access via ports 2181, 9094, 9092
+      VpcId:
+        Fn::ImportValue: !Sub ${ExportResourcesStack}-VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 2181
+          ToPort: 2181
+          SourceSecurityGroupId: !GetAtt
+            - KafkaClientInstanceSecurityGroup
+            - GroupId
+        - IpProtocol: tcp
+          FromPort: 9094
+          ToPort: 9094
+          SourceSecurityGroupId: !GetAtt
+            - KafkaClientInstanceSecurityGroup
+            - GroupId
+        - IpProtocol: tcp
+          FromPort: 9092
+          ToPort: 9092
+          SourceSecurityGroupId: !GetAtt
+            - KafkaClientInstanceSecurityGroup
+            - GroupId
+        - IpProtocol: tcp
+          FromPort: 0
+          ToPort: 65535
+          SourceSecurityGroupId:
+            Fn::ImportValue: !Sub ${SecurityGroupsStack}-ServiceSecurityGroup
+  
+  KafkaClientEC2Instance:
+    DependsOn: MSKCluster
+    Type: 'AWS::EC2::Instance'
+    Properties:
+      InstanceType: t3.micro
+      KeyName: !Ref KeyName
+      IamInstanceProfile: !Ref EC2InstanceProfile
+      AvailabilityZone: !Select
+        - 0
+        - !GetAZs
+          Ref: 'AWS::Region'
+      SubnetId: 
+        Fn::ImportValue: !Sub ${ExportResourcesStack}-PublicSubnet1
+      SecurityGroupIds:
+        - !GetAtt
+          - KafkaClientInstanceSecurityGroup
+          - GroupId
+      ImageId: !FindInMap
+        - RegionAMI
+        - !Ref 'AWS::Region'
+        - HVM64
+      Tags:
+        - Key: Name
+          Value: KafkaClientInstance
+      UserData: !Base64 >
+        #!/bin/bash
+
+        yum update -y
+
+        yum install java-devel -y
+
+        yum install -y jq
+
+        cd /home/ec2-user
+
+        echo "export PATH=.local/bin:$PATH" >> .bash_profile
+
+        mkdir kafka
+
+        cd kafka
+
+        wget https://archive.apache.org/dist/kafka/2.8.1/kafka_2.12-2.8.1.tgz
+
+        tar -xzf kafka_2.12-2.8.1.tgz
+
+        cd /home/ec2-user
+
+        chown -R ec2-user ./kafka
+
+        chgrp -R ec2-user ./kafka
+
+        # kafka/kafka_2.12-2.8.1/bin/kafka-topics.sh --create --bootstrap-server $ZK --replication-factor 3 --partitions 3 --topic raw_text
+
+  EC2Role:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Sid: ''
+            Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: 'sts:AssumeRole'
+      Path: /
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/AmazonMSKFullAccess'
+        - 'arn:aws:iam::aws:policy/AWSCloudFormationReadOnlyAccess'
+  EC2InstanceProfile:
+    Type: 'AWS::IAM::InstanceProfile'
+    Properties:
+      InstanceProfileName: EC2MSKCFProfile
+      Roles:
+        - !Ref EC2Role
+  MSKCluster:
+    Type: 'AWS::MSK::Cluster'
+    Properties:
+      BrokerNodeGroupInfo:
+        ClientSubnets:
+          - Fn::ImportValue: !Sub ${ExportResourcesStack}-PrivateSubnet1
+          - Fn::ImportValue: !Sub ${ExportResourcesStack}-PrivateSubnet2
+          - Fn::ImportValue: !Sub ${ExportResourcesStack}-PrivateSubnet3
+        InstanceType: kafka.t3.small
+        SecurityGroups:
+          - !GetAtt
+            - MSKSecurityGroup
+            - GroupId
+        StorageInfo:
+          EBSStorageInfo:
+            VolumeSize: 100
+      ClusterName: MSKCluster
+      EncryptionInfo:
+        EncryptionInTransit:
+          ClientBroker: TLS_PLAINTEXT
+          InCluster: true
+      EnhancedMonitoring: PER_TOPIC_PER_BROKER
+      KafkaVersion: 2.8.1
+      NumberOfBrokerNodes: 3
+
+Outputs:
+  MSKSecurityGroupID:
+    Description: The ID of the security group created for the MSK clusters
+    Value: !GetAtt
+      - MSKSecurityGroup
+      - GroupId
+  MSKClusterArn:
+    Description: The Arn for the MSK cluster
+    Value: !Ref MSKCluster

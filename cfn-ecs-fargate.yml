@@ -12,15 +12,34 @@ Parameters:
   ExportELBStack:
     Type: String
     Default: alb
-  VPC:
-    Type: AWS::EC2::VPC::Id
   ImageStreamProducer:
     Type: String
     Default: 686137320634.dkr.ecr.eu-north-1.amazonaws.com/reddit-kafka-stream:3.0
+  ImageStreamKeywordsExtractor:
+    Type: String
+    Default: 686137320634.dkr.ecr.eu-north-1.amazonaws.com/stream-keywords-extractor:1.0
+  ImageStreamNERExtractor:
+    Type: String
+    Default: 686137320634.dkr.ecr.eu-north-1.amazonaws.com/stream-ner-extractor:2.0
+  ImageStreamTextCleaner:
+    Type: String
+    Default: 686137320634.dkr.ecr.eu-north-1.amazonaws.com/stream-text-cleaner:2.0
   ServiceName1:
     Type: String
     Default: stream-producer
     AllowedValues: [stream-producer]
+  ServiceName2:
+    Type: String
+    Default: stream-keywords-extractor
+    AllowedValues: [stream-keywords-extractor]
+  ServiceName3:
+    Type: String
+    Default: stream-ner-extractor
+    AllowedValues: [stream-ner-extractor]
+  ServiceName4:
+    Type: String
+    Default: stream-cleaner
+    AllowedValues: [stream-cleaner]
   EnvFile:
     Type: String
     Default: arn:aws:s3:::env-la42wiby/prod.env
@@ -65,6 +84,87 @@ Resources:
               HostPort: 8080
               Protocol: tcp
               AppProtocol: http
+  TaskDefinition2:
+    Type: AWS::ECS::TaskDefinition
+    DependsOn: LogGroup2
+    Properties:
+      Family: !Join ['', [!Ref ServiceName2, TaskDefinition2]]
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      Cpu: 2048
+      Memory: 4GB
+      ExecutionRoleArn: !Ref ExecutionRole
+      TaskRoleArn: !Ref TaskRole
+      ContainerDefinitions:
+        - Name: !Ref ServiceName2
+          Image: !Ref ImageStreamKeywordsExtractor
+          EnvironmentFiles:
+            - Value: !Ref EnvFile
+              type: s3
+          Environment:
+            - Name: KAFKA_BOOTSTRAP_SERVERS
+              Value: !Ref BootStrapServers
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-region: !Ref AWS::Region
+              awslogs-group: !Ref LogGroup2
+              awslogs-stream-prefix: ecs
+  TaskDefinition3:
+    Type: AWS::ECS::TaskDefinition
+    DependsOn: LogGroup3
+    Properties:
+      Family: !Join ['', [!Ref ServiceName3, TaskDefinition3]]
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      Cpu: 2048
+      Memory: 4GB
+      ExecutionRoleArn: !Ref ExecutionRole
+      TaskRoleArn: !Ref TaskRole
+      ContainerDefinitions:
+        - Name: !Ref ServiceName3
+          Image: !Ref ImageStreamNERExtractor
+          EnvironmentFiles:
+            - Value: !Ref EnvFile
+              type: s3
+          Environment:
+            - Name: KAFKA_BOOTSTRAP_SERVERS
+              Value: !Ref BootStrapServers
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-region: !Ref AWS::Region
+              awslogs-group: !Ref LogGroup3
+              awslogs-stream-prefix: ecs
+  TaskDefinition4:
+    Type: AWS::ECS::TaskDefinition
+    DependsOn: LogGroup4
+    Properties:
+      Family: !Join ['', [!Ref ServiceName4, TaskDefinition4]]
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      Cpu: 2048
+      Memory: 4GB
+      ExecutionRoleArn: !Ref ExecutionRole
+      TaskRoleArn: !Ref TaskRole
+      ContainerDefinitions:
+        - Name: !Ref ServiceName4
+          Image: !Ref ImageStreamTextCleaner
+          EnvironmentFiles:
+            - Value: !Ref EnvFile
+              type: s3
+          Environment:
+            - Name: KAFKA_BOOTSTRAP_SERVERS
+              Value: !Ref BootStrapServers
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-region: !Ref AWS::Region
+              awslogs-group: !Ref LogGroup4
+              awslogs-stream-prefix: ecs
 
   ExecutionRole:
     Type: AWS::IAM::Role
@@ -117,8 +217,74 @@ Resources:
           ContainerPort: 8080
           TargetGroupArn: 
             Fn::ImportValue: !Sub ${ExportELBStack}-ALBTargetGroup
+  Service2:
+    Type: AWS::ECS::Service
+    Properties:
+      ServiceName: !Ref ServiceName2
+      Cluster: !Ref Cluster
+      TaskDefinition: !Ref TaskDefinition2
+      DeploymentConfiguration:
+        MinimumHealthyPercent: 100
+        MaximumPercent: 200
+      DesiredCount: 1
+      LaunchType: FARGATE
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: ENABLED
+          Subnets:
+            - Fn::ImportValue: !Sub ${ExportResourcesStack}-PrivateSubnet1
+          SecurityGroups:
+            - Fn::ImportValue: !Sub ${ExportSecurityGroupStack}-ServiceSecurityGroup
+  Service3:
+    Type: AWS::ECS::Service
+    Properties:
+      ServiceName: !Ref ServiceName3
+      Cluster: !Ref Cluster
+      TaskDefinition: !Ref TaskDefinition3
+      DeploymentConfiguration:
+        MinimumHealthyPercent: 100
+        MaximumPercent: 200
+      DesiredCount: 1
+      LaunchType: FARGATE
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: ENABLED
+          Subnets:
+            - Fn::ImportValue: !Sub ${ExportResourcesStack}-PrivateSubnet1
+          SecurityGroups:
+            - Fn::ImportValue: !Sub ${ExportSecurityGroupStack}-ServiceSecurityGroup
+  Service4:
+    Type: AWS::ECS::Service
+    Properties:
+      ServiceName: !Ref ServiceName4
+      Cluster: !Ref Cluster
+      TaskDefinition: !Ref TaskDefinition4
+      DeploymentConfiguration:
+        MinimumHealthyPercent: 100
+        MaximumPercent: 200
+      DesiredCount: 1
+      LaunchType: FARGATE
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: ENABLED
+          Subnets:
+            - Fn::ImportValue: !Sub ${ExportResourcesStack}-PrivateSubnet1
+          SecurityGroups:
+            - Fn::ImportValue: !Sub ${ExportSecurityGroupStack}-ServiceSecurityGroup
 
   LogGroup1:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: !Join ['', [/ecs/, !Ref ServiceName1, TaskDefinition1]]
+  LogGroup2:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Join ['', [/ecs/, !Ref ServiceName2, TaskDefinition2]]
+  LogGroup3:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Join ['', [/ecs/, !Ref ServiceName3, TaskDefinition3]]
+  LogGroup4:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Join ['', [/ecs/, !Ref ServiceName4, TaskDefinition4]]

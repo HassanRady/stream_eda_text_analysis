@@ -8,6 +8,7 @@ Parameters:
   SecurityGroupsStack:
     Description: The name of the security groups stack that exports values
     Type: String
+    Default: sg
   KeyName:
     Description: Name of an existing EC2 KeyPair to enable SSH access to the instance
     Type: 'AWS::EC2::KeyPair::KeyName'

@@ -1,6 +1,6 @@
 # Streaming Event Driven Microservice Architecture
 
-## Demo:
+## Dashboard (Tweets usecase):
  [![IMAGE ALT TEXT](assets/3.png)](https://www.youtube.com/watch?v=KGTCrNkgi54 "Watch Demo")
 
 <!-- <img src="assets/1.png"> -->
